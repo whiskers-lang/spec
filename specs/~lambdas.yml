@@ -1,0 +1,197 @@
+overview: |
+  When a data value is a function (lambda), Whiskers invokes it rather than
+  rendering the delegate type name.
+
+  Variable interpolation ({{key}} or {{{key}}}):
+    Func<object>  — called with no arguments; result is converted to string,
+                    HTML-escaped (for {{key}}), and interpolated.
+
+  Section lambdas ({{#key}}...{{/key}}):
+    Func<string, string>                — receives raw (unexpanded) section content;
+                                          return value is re-rendered as Mustache.
+    Func<string, object>                — same, but return type is object.
+    Func<object, string, object>        — receives the current context view and
+                                          raw content; return is re-rendered.
+    Func<string, Func<string, string>, object>
+                                        — receives raw content and a render callback
+                                          that renders any template in the current
+                                          context; return is re-rendered.
+
+  All section lambda return values are re-rendered as Mustache in the current
+  context using the original delimiters.
+
+  Lambda fixtures used by these tests (resolved by name in the test runner):
+    identity        Func<string, string>   s => s
+    bold            Func<string, string>   s => "<b>" + s + "</b>"
+    upcase          Func<string, object>   s => s.ToUpper()
+    const-hello     Func<object>           () => "hello"
+    bold-tag        Func<object>           () => "<b>"
+    context-name    Func<object,string,object>  (ctx, s) => "{ctx.name}: {s}"
+    to-name         Func<string, object>   _ => "{{name}}"  (used to test re-rendering)
+
+tests:
+  # ── Interpolation lambdas ────────────────────────────────────────────────────
+
+  - name: "Interpolation lambda - invoked"
+    desc: "Func<object> is called and its return value is interpolated."
+    lambdas:
+      ts: const-hello
+    template: "{{ts}}"
+    expected: "hello"
+
+  - name: "Interpolation lambda - HTML escaped"
+    desc: "The Func<object> result is HTML-escaped like a normal variable."
+    lambdas:
+      fn: bold-tag
+    template: "{{fn}}"
+    expected: "&lt;b&gt;"
+
+  - name: "Interpolation lambda - unescaped"
+    desc: "Triple-mustache skips escaping for lambda results."
+    lambdas:
+      fn: bold-tag
+    template: "{{{fn}}}"
+    expected: "<b>"
+
+  # ── Section lambdas: Func<string, string> ────────────────────────────────────
+
+  - name: "Section lambda - result re-rendered"
+    desc: "Func<string, string> return is re-rendered in the current context."
+    data: {name: World}
+    lambdas:
+      wrap: identity
+    template: "{{#wrap}}Hello, {{name}}!{{/wrap}}"
+    expected: "Hello, World!"
+
+  - name: "Section lambda - bold wrapping"
+    desc: "Func<string, string> can wrap raw content; result is re-rendered."
+    lambdas:
+      wrap: bold
+    template: "{{#wrap}}hello{{/wrap}}"
+    expected: "<b>hello</b>"
+
+  - name: "Section lambda - raw content passed"
+    desc: "The lambda receives raw (unexpanded) section text, not the rendered output."
+    data: {name: World}
+    lambdas:
+      wrap: bold
+    template: "{{#wrap}}{{name}}{{/wrap}}"
+    expected: "<b>World</b>"
+
+  # ── Section lambdas: Func<string, object> ────────────────────────────────────
+
+  - name: "Section lambda - object return"
+    desc: "Func<string, object> return is converted to string then re-rendered."
+    lambdas:
+      wrap: upcase
+    template: "{{#wrap}}hello{{/wrap}}"
+    expected: "HELLO"
+
+  - name: "Section lambda - object return re-renders in context"
+    desc: "Func<string,object> return value is re-rendered; Mustache tags in the result are expanded."
+    data: {name: World}
+    lambdas:
+      wrap: to-name
+    template: "{{#wrap}}ignored{{/wrap}}"
+    expected: "World"
+
+  # ── Section lambdas: Func<object, string, object> ────────────────────────────
+
+  - name: "Context-aware lambda"
+    desc: "Func<object, string, object> receives the current context and raw content."
+    data: {name: Alice}
+    lambdas:
+      greet: context-name
+    template: "{{#greet}}world{{/greet}}"
+    expected: "Alice: world"
+
+  - name: "Context-aware lambda - skips primitive context frame"
+    desc: "When nested inside a primitive-valued section, ctx is the nearest non-primitive ancestor, not the boolean/scalar."
+    data: {name: Alice, active: true}
+    lambdas:
+      greet: context-name
+    template: "{{#active}}{{#greet}}world{{/greet}}{{/active}}"
+    expected: "Alice: world"
+
+  # ── Section lambdas: Func<string, Func<string,string>, object> ───────────────
+
+  - name: "Render-callback lambda"
+    desc: "The callback renders any template string in the current context."
+    data: {name: Bob}
+    lambdas:
+      wrap: render-bold
+    template: "{{#wrap}}{{name}}{{/wrap}}"
+    expected: "<b>Bob</b>"
+
+  - name: "Render-callback with static text"
+    desc: "The callback passes static text through unchanged."
+    lambdas:
+      wrap: render-bold
+    template: "{{#wrap}}hello{{/wrap}}"
+    expected: "<b>hello</b>"
+
+  - name: "Render-callback - alternate delimiters propagated"
+    desc: "The render callback uses the delimiter pair active inside the section, not the default {{ }}."
+    data: {name: World}
+    lambdas:
+      wrap: render-bold
+    template: "{{=<% %>=}}<% #wrap %><% name %><% /wrap %>"
+    expected: "<b>World</b>"
+
+  # ── Func<object> in section (not a section lambda signature) ─────────────────
+
+  - name: "Func<object> in section - treated as truthy"
+    desc: "Func<object> is not a section lambda signature; the delegate is truthy so the body renders once, uncalled."
+    lambdas:
+      ts: const-hello
+    template: "{{#ts}}body{{/ts}}"
+    expected: "body"
+
+  # ── Standalone section lambda ────────────────────────────────────────────────
+
+  - name: "Section lambda - standalone open tag"
+    desc: "When the opening tag is on its own line, the leading newline consumed by standalone processing is excluded from raw."
+    data: {name: World}
+    lambdas:
+      wrap: identity
+    template: "Begin.\n{{#wrap}}\nHello {{name}}\n{{/wrap}}\nEnd."
+    expected: "Begin.\nHello World\nEnd."
+
+  # ── Arg-accepting lambdas ─────────────────────────────────────────────────────
+
+  - name: "Arg lambda - truncate with render callback"
+    desc: "Func<object[], string, Func<string,string>, object> receives parsed args, raw content, and a render callback."
+    data: {body: "Hello, World!"}
+    lambdas:
+      truncate: truncate
+    template: "{{#truncate 7}}{{body}}{{/truncate}}"
+    expected: "Hello, …"
+
+  - name: "Arg lambda - string argument"
+    desc: "Quoted string arguments are passed as strings; Func<object[], string, string> wraps content in a tag."
+    lambdas:
+      wrap: wrap-tag
+    template: "{{#wrap \"em\"}}text{{/wrap}}"
+    expected: "<em>text</em>"
+
+  - name: "Arg lambda - unquoted string argument"
+    desc: "Unquoted string arguments are literals rather than context lookups."
+    data: {em: strong}
+    lambdas:
+      wrap: wrap-tag
+    template: "{{#wrap em}}text{{/wrap}}"
+    expected: "<em>text</em>"
+
+  - name: "Arg lambda - non-function with args throws"
+    desc: "Providing arguments to a key whose value is not an arg-accepting function is an error."
+    data: {title: "Hello"}
+    template: "{{#title \"arg\"}}x{{/title}}"
+    throws: true
+
+  - name: "Arg lambda - dynamic argument"
+    desc: "A star-prefixed argument is resolved from the current context at render time."
+    data: {body: "Hello, World!", limit: 7}
+    lambdas:
+      truncate: truncate
+    template: "{{#truncate *limit}}{{body}}{{/truncate}}"
+    expected: "Hello, …"

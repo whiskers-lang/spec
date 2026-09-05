@@ -1,0 +1,67 @@
+overview: |
+  Prefixing a key with . restricts resolution to the current context frame only.
+  Parent frames are not searched, regardless of whether they contain the key.
+
+    .name     — resolve 'name' in the current frame; no parent traversal.
+    .a.b      — resolve 'a' in the current frame, then 'b' within the result.
+
+  Normal (unprefixed) lookup walks the context stack from innermost to outermost.
+  Local lookup stops at the innermost frame and returns nothing if not found there.
+
+  This is useful when you need to distinguish "this frame definitely has no key"
+  from "this frame doesn't have it but a parent does".
+
+tests:
+  - name: "Local - finds key in current frame"
+    desc: ".name resolves a key present in the current context frame."
+    data: {person: {name: Alice}}
+    template: "{{#person}}{{.name}}{{/person}}"
+    expected: "Alice"
+
+  - name: "Local - does not find parent key"
+    desc: ".name returns nothing when the key exists only in a parent frame."
+    data: {name: outer, inner: {age: 1}}
+    template: "{{#inner}}{{.name}}{{/inner}}"
+    expected: ""
+
+  - name: "Local vs normal - parent only has key"
+    desc: "Normal lookup finds a parent-only key; local lookup does not."
+    data:
+      title: Top
+      section: {body: Content}
+    template: "{{#section}}{{title}}|{{.title}}{{/section}}"
+    expected: "Top|"
+
+  - name: "Local vs normal - both frames have key"
+    desc: "When the current frame has the key, both local and normal lookup find it."
+    data:
+      name: outer
+      item: {name: inner}
+    template: "{{#item}}{{.name}}=={{name}}{{/item}}"
+    expected: "inner==inner"
+
+  - name: "Local dotted path"
+    desc: ".a.b resolves 'a' in the current frame, then 'b' within that result."
+    data:
+      nested: {child: {value: ok}}
+      child: {value: wrong}
+    template: "{{#nested}}{{.child.value}}{{/nested}}"
+    expected: "ok"
+
+  - name: "Local - absent key in inner, present in outer (list)"
+    desc: "Inside a list section, .key is empty when only the outer scope has it."
+    data:
+      extra: shared
+      items: [a, b]
+    template: "{{#items}}{{extra}}|{{.extra}}{{/items}}"
+    expected: "shared|shared|"
+
+  - name: "Local - key present in inner shadows outer"
+    desc: "When the inner frame has the key, .key and normal lookup agree."
+    data:
+      label: outer
+      items:
+        - {label: A}
+        - {label: B}
+    template: "{{#items}}{{.label}}/{{label}} {{/items}}"
+    expected: "A/A B/B "

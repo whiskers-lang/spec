@@ -1,0 +1,104 @@
+overview: |
+  A :alias suffix on a section opening tag binds the pushed scope to a name.
+  Inside the section, alias.key resolves against the aliased value. Aliases
+  survive nesting — they are visible anywhere within the section they were
+  declared, including deeply nested sub-sections.
+
+  Alias names must not begin with @ (reserved for metadata).
+  An alias takes priority over any data key of the same name.
+
+  @root is a built-in alias that always refers to the root (top-level) data
+  object regardless of nesting depth. It cannot be reassigned.
+
+tests:
+  - name: "Basic alias"
+    desc: An alias provides a named handle to the pushed object.
+    data: {user: {name: Alice}}
+    template: "{{#user :u}}{{u.name}}{{/user}}"
+    expected: "Alice"
+
+  - name: "Alias in list iteration"
+    desc: During list iteration the alias names each element in turn.
+    data:
+      items:
+        - {name: A}
+        - {name: B}
+        - {name: C}
+    template: "{{#items :it}}{{it.name}}{{/items}}"
+    expected: "ABC"
+
+  - name: "Alias with outer key access"
+    desc: Outer-scope keys remain accessible alongside the alias.
+    data:
+      label: Info
+      item: {value: 42}
+    template: "{{#item :it}}{{label}}={{it.value}}{{/item}}"
+    expected: "Info=42"
+
+  - name: "Alias dotted access"
+    desc: alias.nested.key resolves through the aliased object.
+    data: {node: {child: {value: ok}}}
+    template: "{{#node :n}}{{n.child.value}}{{/node}}"
+    expected: "ok"
+
+  - name: "Alias shadows data key of same name"
+    desc: The alias takes priority over any data key that happens to share its name.
+    data: {self: {v: inner}, v: outer}
+    template: "{{#self :self}}{{self.v}}{{/self}}"
+    expected: "inner"
+
+  - name: "Alias disambiguates same key in both scopes"
+    desc: |
+      This is the core use case for aliases. Without one, the inner scope's 'name'
+      shadows the outer scope's 'name', making the outer value unreachable.
+      With an alias the outer value is accessible as alias.name.
+    data:
+      employer: {name: Corp}
+      employee: {name: Alice}
+    template: "{{#employer :e}}{{#employee}}{{e.name}}: {{name}}{{/employee}}{{/employer}}"
+    expected: "Corp: Alice"
+
+  - name: "Multiple aliases active simultaneously"
+    desc: Aliases from multiple nesting levels are all accessible at the same time.
+    data:
+      a: {k: X}
+      b: {k: Y}
+    template: "{{#a :ax}}{{#b :bx}}{{ax.k}}-{{bx.k}}{{/b}}{{/a}}"
+    expected: "X-Y"
+
+  - name: "Alias in list with outer scope disambiguation"
+    desc: An alias on a list section lets each iteration body reference both the item and the outer context.
+    data:
+      dept: Engineering
+      members:
+        - {name: Alice}
+        - {name: Bob}
+    template: "{{#members :m}}{{dept}}/{{m.name}} {{/members}}"
+    expected: "Engineering/Alice Engineering/Bob "
+
+  - name: "Alias in inverted section"
+    desc: "The :alias syntax works with the ^ sigil."
+    data: {items: []}
+    template: "{{^items :it}}empty{{/items}}"
+    expected: "empty"
+
+
+  - name: "Alias visible in nested section"
+    desc: An alias declared in an outer section is reachable inside an inner section.
+    data:
+      outer: {label: X}
+      inner: {value: 1}
+    template: "{{#outer :o}}{{#inner}}{{o.label}}={{value}}{{/inner}}{{/outer}}"
+    expected: "X=1"
+
+  - name: "@root accesses top-level data"
+    desc: "@root always resolves to the root data object, regardless of nesting."
+    data: {title: Home, nav: {label: About}}
+    template: "{{#nav}}{{@root.title}}{{/nav}}"
+    expected: "Home"
+
+  - name: "@root inside list iteration"
+    desc: "@root is accessible from inside a list section."
+    data: {prefix: x, items: [a, b]}
+    template: "{{#items}}{{@root.prefix}}{{.}}{{/items}}"
+    expected: "xaxb"

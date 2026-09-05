@@ -1,0 +1,180 @@
+overview: |
+  Whiskers extends Mustache sections with four additional sigils.
+
+    * (exists):   renders when the key is present in data, regardless of value.
+                  Pushes the value onto context, like #.
+    % (absent):   renders when the key is completely absent from data.
+    ~ (not-null): renders when the key exists and its value is not null; pushes value.
+    ? (null):     renders when the key exists and its value is null.
+
+  The * and % sigils are exempt from strict mode and never throw on missing keys.
+  The ~ and ? sigils throw in strict mode when the key is absent.
+
+  Layers: exists (*) ⊃ not-null (~) ⊃ truthy (#). A missing key fails all three.
+
+tests:
+  # ── * (exists) ──────────────────────────────────────────────────────────────
+
+  - name: "Exists - truthy value"
+    desc: "{{*key}} renders when the key holds a truthy value."
+    data: {x: hello}
+    template: "{{*x}}yes{{/x}}"
+    expected: "yes"
+
+  - name: "Exists - false value"
+    desc: "{{*key}} renders even when the value is false."
+    data: {x: false}
+    template: "{{*x}}yes{{/x}}"
+    expected: "yes"
+
+  - name: "Exists - null value"
+    desc: "{{*key}} renders even when the value is null."
+    data: {x: ~}
+    template: "{{*x}}yes{{/x}}"
+    expected: "yes"
+
+  - name: "Exists - absent key"
+    desc: "{{*key}} does not render when the key is absent."
+    data: {}
+    template: "{{*x}}yes{{/x}}"
+    expected: ""
+
+  - name: "Exists - pushes context"
+    desc: "Inside {{*key}}, the resolved value is at the top of context."
+    data: {person: {name: Alice}}
+    template: "{{*person}}{{name}}{{/person}}"
+    expected: "Alice"
+
+  - name: "Exists - dot is current value"
+    desc: "{{.}} inside {{*key}} refers to the key's value."
+    data: {x: hello}
+    template: "{{*x}}{{.}}{{/x}}"
+    expected: "hello"
+
+  # ── % (absent) ───────────────────────────────────────────────────────────────
+
+  - name: "Absent - missing key"
+    desc: "{{%key}} renders when the key is absent."
+    data: {}
+    template: "{{%x}}yes{{/x}}"
+    expected: "yes"
+
+  - name: "Absent - truthy value"
+    desc: "{{%key}} does not render when the key is present with a truthy value."
+    data: {x: hello}
+    template: "{{%x}}yes{{/x}}"
+    expected: ""
+
+  - name: "Absent - null value"
+    desc: "{{%key}} does not render when the key is present, even if null."
+    data: {x: ~}
+    template: "{{%x}}yes{{/x}}"
+    expected: ""
+
+  - name: "Absent - false value"
+    desc: "{{%key}} does not render when the key is present, even if false."
+    data: {x: false}
+    template: "{{%x}}yes{{/x}}"
+    expected: ""
+
+  - name: "Exists and Absent are complementary"
+    desc: "Exactly one of {{*key}} and {{%key}} renders."
+    data: {score: 0}
+    template: "{{*score}}present{{/score}}{{%score}}absent{{/score}}"
+    expected: "present"
+
+  # ── ~ (not-null) ─────────────────────────────────────────────────────────────
+
+  - name: "NotNull - non-null value"
+    desc: "{{~key}} renders and pushes value when key exists and is not null."
+    data: {person: {name: Bob}}
+    template: "{{~person}}{{name}}{{/person}}"
+    expected: "Bob"
+
+  - name: "NotNull - null value"
+    desc: "{{~key}} does not render when value is null."
+    data: {x: ~}
+    template: "{{~x}}yes{{/x}}"
+    expected: ""
+
+  - name: "NotNull - absent key"
+    desc: "{{~key}} does not render when key is absent."
+    data: {}
+    template: "{{~x}}yes{{/x}}"
+    expected: ""
+
+  - name: "NotNull - false value is non-null"
+    desc: "false is not null, so {{~key}} renders for a false value."
+    data: {x: false}
+    template: "{{~x}}yes{{/x}}"
+    expected: "yes"
+
+  # ── ? (null) ─────────────────────────────────────────────────────────────────
+
+  - name: "Null - null value"
+    desc: "{{?key}} renders when key is present and its value is null."
+    data: {x: ~}
+    template: "{{?x}}yes{{/x}}"
+    expected: "yes"
+
+  - name: "Null - truthy value"
+    desc: "{{?key}} does not render when key has a non-null value."
+    data: {x: hello}
+    template: "{{?x}}yes{{/x}}"
+    expected: ""
+
+  - name: "Null - false value"
+    desc: "{{?key}} does not render when value is false (non-null)."
+    data: {x: false}
+    template: "{{?x}}yes{{/x}}"
+    expected: ""
+
+  - name: "Null - absent key"
+    desc: "{{?key}} does not render when key is absent."
+    data: {}
+    template: "{{?x}}yes{{/x}}"
+    expected: ""
+
+  - name: "NotNull and Null are complementary"
+    desc: "Exactly one of {{~key}} and {{?key}} renders when key is present."
+    data: {x: ~}
+    template: "{{~x}}not-null{{/x}}{{?x}}null{{/x}}"
+    expected: "null"
+
+  # ── Combinations ──────────────────────────────────────────────────────────────
+
+  - name: "Exists wraps Null check"
+    desc: "Use * and ? together to handle a key that is present but null."
+    data: {score: ~}
+    template: "{{*score}}{{?score}}n/a{{/score}}{{/score}}"
+    expected: "n/a"
+
+  # ── Sigil + alias ─────────────────────────────────────────────────────────────
+
+  - name: "Exists with alias"
+    desc: "{{*key :alias}} pushes the value and binds the alias, just like #."
+    data: {person: {name: Alice}}
+    template: "{{*person :p}}{{p.name}}{{/person}}"
+    expected: "Alice"
+
+  - name: "NotNull with alias"
+    desc: "{{~key :alias}} binds the alias when the value is not null."
+    data: {person: {name: Bob}}
+    template: "{{~person :p}}{{p.name}}{{/person}}"
+    expected: "Bob"
+
+  # ── Standalone ───────────────────────────────────────────────────────────────
+
+  - name: "Exists - standalone tag"
+    desc: "{{*key}} on its own line is standalone; the tag's line is consumed."
+    data: {x: yes}
+    template: "A\n{{*x}}\nB\n{{/x}}\nC"
+    expected: "A\nB\nC"
+
+  # ── List value ───────────────────────────────────────────────────────────────
+
+  - name: "Exists - list value renders once"
+    desc: "{{*key}} renders the body once when the value is a list; use # to iterate."
+    data: {items: [a, b, c]}
+    template: "{{*items}}present{{/items}}"
+    expected: "present"

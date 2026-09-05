@@ -1,0 +1,94 @@
+overview: |
+  Whiskers has two ways to enable strict mode (missing keys throw instead of
+  rendering empty):
+
+    1. RenderOptions(StrictMode: true) — global, applies to the entire render.
+    2. {{#@strict}}...{{/@strict}} — inline block, opts a template section in.
+
+  Inside a strict block:
+    - Variable tags throw if the key is absent.
+    - Section tags (#, ^, ~, ?) throw if the key is absent.
+    - The * and % sigils are ALWAYS exempt — they never throw regardless of mode.
+    - Keys that exist (including null-valued ones) do not throw.
+
+  Outside a strict block (or when using the default non-strict renderer):
+    - Missing keys render as empty string, consistent with Mustache.
+
+  Note: tests marked with 'throws: true' assert that a RenderException is raised.
+
+tests:
+  # ── Non-strict default ────────────────────────────────────────────────────────
+
+  - name: "Non-strict - missing variable renders empty"
+    desc: By default, missing keys produce empty output.
+    data: {}
+    template: "a{{missing}}b"
+    expected: "ab"
+
+  - name: "Non-strict - missing section skipped"
+    desc: A missing section key skips the block silently.
+    data: {}
+    template: "a{{#missing}}X{{/missing}}b"
+    expected: "ab"
+
+  # ── {{#@strict}} block ────────────────────────────────────────────────────────
+
+  - name: "Strict block - present key renders normally"
+    desc: Inside {{#@strict}}, a key that exists renders without error.
+    data: {name: Alice}
+    template: "{{#@strict}}{{name}}{{/@strict}}"
+    expected: "Alice"
+
+  - name: "Strict block - missing variable throws"
+    desc: Inside {{#@strict}}, a missing variable key raises an error.
+    data: {}
+    template: "{{#@strict}}{{missing}}{{/@strict}}"
+    throws: true
+
+  - name: "Strict block - missing section throws"
+    desc: Inside {{#@strict}}, a missing section key raises an error.
+    data: {}
+    template: "{{#@strict}}{{#missing}}X{{/missing}}{{/@strict}}"
+    throws: true
+
+  - name: "Strict block - * is exempt"
+    desc: "{{*key}} never throws, even inside {{#@strict}}."
+    data: {}
+    template: "{{#@strict}}{{*missing}}X{{/missing}}{{/@strict}}"
+    expected: ""
+
+  - name: "Strict block - % is exempt"
+    desc: "{{%key}} never throws, even inside {{#@strict}}."
+    data: {}
+    template: "{{#@strict}}{{%missing}}X{{/missing}}{{/@strict}}"
+    expected: "X"
+
+  - name: "Strict block - null value is not an error"
+    desc: A key that exists with a null value does not throw in strict mode.
+    data: {x: ~}
+    template: "{{#@strict}}{{x}}{{/@strict}}"
+    expected: ""
+
+  - name: "Strict block - ~ throws for absent key"
+    desc: "{{~key}} throws in strict mode when the key is absent."
+    data: {}
+    template: "{{#@strict}}{{~missing}}X{{/missing}}{{/@strict}}"
+    throws: true
+
+  - name: "Strict block - ? throws for absent key"
+    desc: "{{?key}} throws in strict mode when the key is absent."
+    data: {}
+    template: "{{#@strict}}{{?missing}}X{{/missing}}{{/@strict}}"
+    throws: true
+
+  - name: "Strict block - does not affect outer context"
+    desc: Template content outside {{#@strict}} stays lenient.
+    data: {name: Alice}
+    template: "{{outer_missing}}{{#@strict}}{{name}}{{/@strict}}{{also_missing}}"
+    expected: "Alice"
+
+  - name: "Strict block - nested in a section"
+    desc: "{{#@strict}} can appear inside a regular section."
+    data: {items: [{name: A}]}
+    template: "{{#items}}{{#@strict}}{{name}}{{/@strict}}{{/items}}"
+    expected: "A"

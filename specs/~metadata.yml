@@ -1,0 +1,76 @@
+overview: |
+  When Whiskers iterates an array with a # section it injects read-only
+  metadata variables (prefixed with @) into the section scope.
+
+    @index    zero-based position (0, 1, 2, ...)
+    @number   one-based position  (1, 2, 3, ...)
+    @first    true on the first element, false otherwise
+    @last     true on the last element, false otherwise
+    @length   total number of elements
+
+  Metadata variables are read-only and local to the iteration scope.
+  They are NOT accessible outside the section that introduced them.
+
+tests:
+  - name: "@index is zero-based"
+    desc: "@index starts at 0."
+    data: {items: [a, b, c]}
+    template: "{{#items}}{{@index}}{{/items}}"
+    expected: "012"
+
+  - name: "@number is one-based"
+    desc: "@number starts at 1."
+    data: {items: [a, b, c]}
+    template: "{{#items}}{{@number}}{{/items}}"
+    expected: "123"
+
+  - name: "@length is constant"
+    desc: "@length is the total item count, the same on every iteration."
+    data: {items: [a, b, c]}
+    template: "{{#items}}{{@length}}{{/items}}"
+    expected: "333"
+
+  - name: "@first section"
+    desc: "{{#@first}}...{{/@first}} renders only on the first element."
+    data: {items: [a, b, c]}
+    template: "{{#items}}{{#@first}}[{{/@first}}{{.}}{{/items}}"
+    expected: "[abc"
+
+  - name: "@last section"
+    desc: "{{#@last}}...{{/@last}} renders only on the last element."
+    data: {items: [a, b, c]}
+    template: "{{#items}}{{.}}{{#@last}}]{{/@last}}{{/items}}"
+    expected: "abc]"
+
+  - name: "@first and @last on single element"
+    desc: "A single-element list sets both @first and @last to true."
+    data: {items: [x]}
+    template: "{{#items}}{{#@first}}F{{/@first}}{{#@last}}L{{/@last}}{{/items}}"
+    expected: "FL"
+
+  - name: "Inverted @first"
+    desc: "{{^@first}} renders on every element except the first."
+    data: {items: [a, b, c]}
+    template: "{{#items}}{{^@first}}, {{/@first}}{{.}}{{/items}}"
+    expected: "a, b, c"
+
+  - name: "Inverted @last"
+    desc: "{{^@last}} renders on every element except the last."
+    data: {items: [a, b, c]}
+    template: "{{#items}}{{.}}{{^@last}}-{{/@last}}{{/items}}"
+    expected: "a-b-c"
+
+  - name: "Nested list - @index isolation"
+    desc: "Inner list iterations have their own @index; the outer @index is unaffected."
+    data:
+      rows:
+        - {cells: [a, b]}
+        - {cells: [c]}
+    template: "{{#rows}}{{@index}}:{{#cells}}{{.}}{{/cells}} {{/rows}}"
+    expected: "0:ab 1:c "
+
+  - name: "@index outside list renders empty"
+    desc: "@index is undefined outside a list section and renders as empty string."
+    data: {}
+    template: "{{@index}}"
+    expected: ""
