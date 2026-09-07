@@ -60,14 +60,14 @@ tests:
     template: "{{#items}}{{.}}{{^@last}}-{{/@last}}{{/items}}"
     expected: "a-b-c"
 
-  - name: "Nested list - @index isolation"
-    desc: "Inner list iterations have their own @index; the outer @index is unaffected."
+  - name: "Nested list metadata isolation and qualified access"
+    desc: "Inner iterations shadow unqualified metadata; aliases retain access to each iteration's metadata."
     data:
       rows:
-        - {cells: [a, b]}
-        - {cells: [c]}
-    template: "{{#rows}}{{@index}}:{{#cells}}{{.}}{{/cells}} {{/rows}}"
-    expected: "0:ab 1:c "
+        - [a, b]
+        - [c]
+    template: "{{#rows :row}}{{@index}}:[{{#. :cell}}{{@row.index}}.{{@index}}/{{@cell.index}}={{.}};{{/.}}]{{@index}} {{/rows}}"
+    expected: "0:[0.0/0=a;0.1/1=b;]0 1:[1.0/0=c;]1 "
 
   - name: "@index outside list renders empty"
     desc: "@index is undefined outside a list section and renders as empty string."
