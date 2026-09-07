@@ -72,6 +72,12 @@ tests:
     template: "{{#outer :scope}}{{#inner :scope}}{{scope.value}}{{/inner}}{{/outer}}"
     throws: true
 
+  - name: "Alias reuse after section closes"
+    desc: An alias may be reused after the section that declared it has closed.
+    data: {first: {value: A}, second: {value: B}}
+    template: "{{#first :scope}}{{scope.value}}{{/first}}{{#second :scope}}{{scope.value}}{{/second}}"
+    expected: "AB"
+
   - name: "Alias in list with outer scope disambiguation"
     desc: An alias on a list section lets each iteration body reference both the item and the outer context.
     data:
