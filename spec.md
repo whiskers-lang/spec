@@ -83,6 +83,7 @@ These constraints cannot be expressed in the grammar and must be enforced at run
 | `.alias.key` | Named scope `alias`, no traversal within it |
 | `@root` | Root context |
 | `@root.key` | `key` in root context |
+| `@alias.index`, etc. | Iteration metadata for the active named scope `alias` |
 | `@index`, `@first`, etc. | Iteration metadata — only valid inside an array section |
 
 ### Section sigils
@@ -132,6 +133,10 @@ Inside a parent tag, `{{$ block}}override{{/block}}` replaces the named block in
 
 A `:alias` suffix on a section opening tag binds the scope name for the duration of that block. Alias names must not shadow `@` metadata names.
 
+When the named section iterates an array, its iteration metadata is available as `@alias.index`, `@alias.number`, `@alias.first`, `@alias.last`, and `@alias.length`. Qualified metadata is absent when the alias is inactive or its section does not iterate an array.
+
+An alias must not duplicate an alias declared by an enclosing section. Such a collision is an error. An alias name may be reused after the section that declared it has closed.
+
 ### Lambda arguments
 
 When a key resolves to a function it is called as a lambda:
@@ -158,6 +163,8 @@ Strict mode is activated by a CLI/render flag (global) or a `{{#@strict}}...{{/@
 ### Iteration metadata
 
 `@index`, `@number`, `@first`, `@last`, and `@length` are injected automatically when iterating an array. They are not available outside of array sections.
+
+Unqualified metadata resolves against the innermost active array iteration. A nested array therefore shadows the outer array's unqualified metadata for the duration of its section. Use alias-qualified metadata such as `@row.index` to access an outer iteration from inside a nested array.
 
 `@root` is always available at any depth.
 

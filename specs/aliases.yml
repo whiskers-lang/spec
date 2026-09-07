@@ -66,6 +66,12 @@ tests:
     template: "{{#a :ax}}{{#b :bx}}{{ax.k}}-{{bx.k}}{{/b}}{{/a}}"
     expected: "X-Y"
 
+  - name: "Nested alias collision"
+    desc: An alias must not duplicate an alias declared by an enclosing section.
+    data: {outer: {inner: {value: x}}}
+    template: "{{#outer :scope}}{{#inner :scope}}{{scope.value}}{{/inner}}{{/outer}}"
+    throws: true
+
   - name: "Alias in list with outer scope disambiguation"
     desc: An alias on a list section lets each iteration body reference both the item and the outer context.
     data:
