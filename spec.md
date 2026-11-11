@@ -30,16 +30,16 @@ text           ← (!'{{' ANY)+
 
 (* Comments and triple-mustache must be checked before regular tags *)
 tag            ← '{{!' (!'}}' ANY)* '}}'
-               / '{{{' _ keypath _ '}}}'          (* unescaped, triple-mustache *)
+               / '{{{' _ keypath (_ argument)* _ '}}}'   (* unescaped, triple-mustache *)
                / '{{' _ tag_inner _ '}}'          (* regular tag *)
 
 tag_inner      ← '/' _ keypath                    (* section close *)
-               / '&' _ keypath                    (* unescaped, ampersand form *)
+               / '&' _ keypath (_ argument)*      (* unescaped, ampersand form *)
                / '>' _ '*' _ keypath             (* dynamic partial *)
                / '>' _ keypath                    (* partial *)
                / '=' _ DELIM _ DELIM _ '='       (* set delimiter *)
                / opener _ keypath (_ ':' _ IDENT)? (_ argument)*   (* section open *)
-               / keypath                          (* variable *)
+               / keypath (_ argument)*            (* variable *)
 
 opener         ← '#'              (* truthy *)
                / '^'             (* falsy *)
@@ -142,9 +142,12 @@ An alias must not duplicate an alias declared by an enclosing section. Such a co
 When a key resolves to a function it is called as a lambda:
 
 - **Variable** `{{lambda}}` — called with no arguments; return value rendered (HTML-escaped) and interpolated.
+- **Variable with arguments** `{{lambda "text" 42 *value}}` — called with the parsed argument values in order, without raw section text or a render callback. The return value is converted to a string and interpolated, not re-rendered as a template.
 - **Section** `{{#lambda}}text{{/lambda}}` — called with the raw, unrendered section text; return value treated as a new template and re-rendered in the current context.
 
-Space-separated arguments after the key name are passed alongside the raw text. Providing arguments to a non-function key is an error.
+Space-separated arguments after the key name are supported in variable tags and section opening tags. For section lambdas, they are passed alongside the raw text. Variable lambdas with arguments use normal interpolation escaping: `{{lambda arg}}` is HTML-escaped, while `{{{lambda arg}}}` and `{{&lambda arg}}` are unescaped. They remain variable tags, not standalone-eligible section tags, and work with the active delimiters.
+
+Providing arguments to a resolved non-function key, or to a function that does not accept arguments for that tag form, is an error. Missing lambda keys follow normal variable or section lookup behavior: empty output in non-strict mode and an error in strict mode.
 
 Quoted and unquoted strings are literals: `"foo bar"` passes `foo bar`, and `foo` passes `foo`. Numeric literals are passed as numbers. A `*` prefix makes an argument dynamic, so `*foo` resolves `foo` from the current context and `*@root.foo` resolves from the root context.
 
