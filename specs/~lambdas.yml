@@ -6,6 +6,14 @@ overview: |
     Func<object>  — called with no arguments; result is converted to string,
                     HTML-escaped (for {{key}}), and interpolated.
 
+  Variable interpolation with arguments ({{key arg}}, {{{key arg}}}, or {{&key arg}}):
+    Func<object[], object>              — receives parsed arguments in order, without
+                                          raw content or a render callback.
+    The result is converted to string and interpolated, never re-rendered as a
+    template. Normal tags HTML-escape the result; triple-mustache and ampersand
+    forms do not. Missing keys retain normal lookup behavior; resolved values
+    that do not accept arguments for this tag form cause an error.
+
   Section lambdas ({{#key}}...{{/key}}):
     Func<string, string>                — receives raw (unexpanded) section content;
                                           return value is re-rendered as Mustache.
@@ -28,6 +36,11 @@ overview: |
     bold-tag        Func<object>           () => "<b>"
     context-name    Func<object,string,object>  (ctx, s) => "{ctx.name}: {s}"
     to-name         Func<string, object>   _ => "{{name}}"  (used to test re-rendering)
+    join-args       Func<object[], object> args => string.Join("|", args)
+                    Joins argument values using invariant string conversion.
+
+  Test runners must register join-args for the argument-taking interpolation
+  fixtures below, in addition to the existing named lambda fixtures.
 
 tests:
   # ── Interpolation lambdas ────────────────────────────────────────────────────
@@ -195,3 +208,91 @@ tests:
       truncate: truncate
     template: "{{#truncate *limit}}{{body}}{{/truncate}}"
     expected: "Hello, …"
+
+  # Interpolation lambdas with arguments
+
+  - name: "Interpolation arg lambda - literal arguments"
+    desc: "Quoted and unquoted strings are literals; numeric arguments are passed in order."
+    data: {word: resolved}
+    lambdas:
+      join: join-args
+    template: "{{join \"foo bar\" word 42 3.14}}"
+    expected: "foo bar|word|42|3.14"
+
+  - name: "Interpolation arg lambda - dynamic arguments"
+    desc: "Dynamic arguments use the current context or an explicit root lookup."
+    data: {value: root, item: {value: local}}
+    lambdas:
+      join: join-args
+    template: "{{#item}}{{join *value *@root.value}}{{/item}}"
+    expected: "local|root"
+
+  - name: "Interpolation arg lambda - HTML escaped and not re-rendered"
+    desc: "The result is HTML-escaped without expanding template tags in it."
+    data: {name: World}
+    lambdas:
+      join: join-args
+    template: '{{join "<b>{{name}}</b>"}}'
+    expected: "&lt;b&gt;{{name}}&lt;/b&gt;"
+
+  - name: "Interpolation arg lambda - triple-mustache"
+    desc: "Triple-mustache neither HTML-escapes nor re-renders the result."
+    data: {name: World}
+    lambdas:
+      join: join-args
+    template: '{{{join "<b>{{name}}</b>"}}}'
+    expected: "<b>{{name}}</b>"
+
+  - name: "Interpolation arg lambda - ampersand"
+    desc: "Ampersand interpolation neither HTML-escapes nor re-renders the result."
+    data: {name: World}
+    lambdas:
+      join: join-args
+    template: '{{&join "<b>{{name}}</b>"}}'
+    expected: "<b>{{name}}</b>"
+
+  - name: "Interpolation arg lambda - alternate delimiters"
+    desc: "Argument-taking interpolation uses the active delimiters."
+    lambdas:
+      join: join-args
+    template: '{{=<% %>=}}<%join "<b>"%>|<%&join "<b>"%>'
+    expected: "&lt;b&gt;|<b>"
+
+  - name: "Interpolation arg lambda - not standalone"
+    desc: "An argument-taking variable tag preserves surrounding whitespace and newlines."
+    lambdas:
+      join: join-args
+    template: "Begin.\n  {{join text}}\nEnd."
+    expected: "Begin.\n  text\nEnd."
+
+  - name: "Interpolation arg lambda - non-function throws"
+    desc: "Arguments on a resolved non-function value cause an error."
+    data: {title: Hello}
+    template: "{{title arg}}"
+    throws: true
+
+  - name: "Interpolation arg lambda - null throws"
+    desc: "A present null value does not accept arguments."
+    data: {value: null}
+    template: "{{value arg}}"
+    throws: true
+
+  - name: "Interpolation arg lambda - no-argument function throws"
+    desc: "A no-argument lambda cannot silently ignore supplied arguments."
+    lambdas:
+      fn: const-hello
+    template: "{{fn arg}}"
+    throws: true
+
+  - name: "Interpolation arg lambda - section-only function throws"
+    desc: "A function accepting raw section text is not an argument-taking variable lambda."
+    lambdas:
+      fn: wrap-tag
+    template: "{{fn em}}"
+    throws: true
+
+  - name: "Interpolation arg lambda - missing key renders empty"
+    desc: "Arguments do not change non-strict lookup behavior for an absent key."
+    data: {}
+    template: "a{{missing arg}}b"
+    expected: "ab"

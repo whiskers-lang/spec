@@ -45,6 +45,12 @@ tests:
     template: "{{#@strict}}{{missing}}{{/@strict}}"
     throws: true
 
+  - name: "Strict block - missing variable with arguments throws"
+    desc: Arguments do not change strict lookup behavior for an absent variable.
+    data: {}
+    template: "{{#@strict}}{{missing arg}}{{/@strict}}"
+    throws: true
+
   - name: "Strict block - missing section throws"
     desc: Inside {{#@strict}}, a missing section key raises an error.
     data: {}
