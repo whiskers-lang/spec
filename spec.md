@@ -145,6 +145,10 @@ When a key resolves to a function it is called as a lambda:
 - **Variable with arguments** `{{lambda "text" 42 *value}}` — called with the parsed argument values in order, without raw section text or a render callback. The return value is converted to a string and interpolated, not re-rendered as a template.
 - **Section** `{{#lambda}}text{{/lambda}}` — called with the raw, unrendered section text; return value treated as a new template and re-rendered in the current context.
 
+For section lambdas, "raw" means unexpanded, not exempt from standalone whitespace handling. If the opening tag is standalone, its following line ending is excluded from the body passed to the lambda. If the closing tag is standalone, the indentation immediately before that tag is also excluded. All other body content, including unexpanded tags, content indentation, and intentional blank lines, is preserved.
+
+Section lambda return values and templates passed to render callbacks follow the same standalone rules as ordinary templates. These rules also apply when the section lambda accepts arguments.
+
 Space-separated arguments after the key name are supported in variable tags and section opening tags. For section lambdas, they are passed alongside the raw text. Variable lambdas with arguments use normal interpolation escaping: `{{lambda arg}}` is HTML-escaped, while `{{{lambda arg}}}` and `{{&lambda arg}}` are unescaped. They remain variable tags, not standalone-eligible section tags, and work with the active delimiters.
 
 Providing arguments to a resolved non-function key, or to a function that does not accept arguments for that tag form, is an error. Missing lambda keys follow normal variable or section lookup behavior: empty output in non-strict mode and an error in strict mode.
@@ -174,6 +178,10 @@ Unqualified metadata resolves against the innermost active array iteration. A ne
 ### Standalone tags
 
 A tag is standalone if it occupies a line by itself with only optional surrounding whitespace. Standalone tags consume the entire line including the trailing newline, leaving no blank line in the output.
+
+Standalone status is determined from the template's original line boundaries. Consecutive standalone tags each consume their own line; removing one tag's line must not cause the next tag to be treated as inline. Both LF and CRLF line endings are supported, and unrelated content whitespace and blank lines are preserved.
+
+An opening and closing tag on the same line are not standalone, even if the body between them is empty or contains only whitespace.
 
 The following tag types are standalone-eligible: all section opens and closes (all openers), comments, set delimiter, partials, dynamic partials, parent tags (`<`), block tags (`$`), and `{{#@strict}}`.
 

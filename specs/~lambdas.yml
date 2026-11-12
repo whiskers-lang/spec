@@ -28,6 +28,11 @@ overview: |
   All section lambda return values are re-rendered as Mustache in the current
   context using the original delimiters.
 
+  Standalone opening-tag line endings and closing-tag indentation are excluded
+  from the raw section body passed to a lambda. Other body content is preserved.
+  Returned templates and render-callback inputs use the same standalone rules
+  as ordinary templates, including for section lambdas with arguments.
+
   Lambda fixtures used by these tests (resolved by name in the test runner):
     identity        Func<string, string>   s => s
     bold            Func<string, string>   s => "<b>" + s + "</b>"
@@ -169,6 +174,102 @@ tests:
       wrap: identity
     template: "Begin.\n{{#wrap}}\nHello {{name}}\n{{/wrap}}\nEnd."
     expected: "Begin.\nHello World\nEnd."
+
+  - name: "Section lambda - nested standalone sections"
+    desc: "Re-rendering an identity lambda result consumes nested standalone tag lines without adding blank lines."
+    data: {items: [one, two]}
+    lambdas:
+      wrap: identity
+    template: "Before\n{{#wrap}}\n  {{#items}}\n  {{.}}\n  {{/items}}\n{{/wrap}}\nAfter"
+    expected: "Before\n  one\n  two\nAfter"
+
+  - name: "Section lambda - nested standalone sections with tabs and CRLF"
+    desc: "Nested standalone processing preserves content tabs and CRLF line endings."
+    data: {items: [one, two]}
+    lambdas:
+      wrap: identity
+    template: "Before\r\n{{#wrap}}\r\n\t{{#items}}\r\n\t{{.}}\r\n\t{{/items}}\r\n{{/wrap}}\r\nAfter"
+    expected: "Before\r\n\tone\r\n\ttwo\r\nAfter"
+
+  - name: "Section lambda - standalone closing indentation excluded"
+    desc: "The indentation before a standalone closing tag is not included in the raw lambda body."
+    lambdas:
+      wrap: identity
+    template: "Before\n  {{#wrap}}\n  body\n  {{/wrap}}\nAfter"
+    expected: "Before\n  body\nAfter"
+
+  - name: "Section lambda - standalone closing indentation excluded with CRLF"
+    desc: "Standalone closing-tag tab indentation is excluded without changing content indentation or CRLF."
+    lambdas:
+      wrap: identity
+    template: "Before\r\n\t{{#wrap}}\r\n\tbody\r\n\t{{/wrap}}\r\nAfter"
+    expected: "Before\r\n\tbody\r\nAfter"
+
+  - name: "Section lambda - wrapping preserves body boundary whitespace"
+    desc: "Standalone handling removes tag-line whitespace before the lambda wraps the body, but preserves the body's final newline."
+    lambdas:
+      wrap: bold
+    template: "Before\n  {{#wrap}}\n  body\n  {{/wrap}}\nAfter"
+    expected: "Before\n<b>  body\n</b>After"
+
+  - name: "Section lambda - empty inline body preserves its line"
+    desc: "An adjacent opening and closing tag pair is not standalone."
+    lambdas:
+      wrap: identity
+    template: "Before\n  {{#wrap}}{{/wrap}}\nAfter"
+    expected: "Before\n  \nAfter"
+
+  - name: "Section lambda - whitespace-only inline body preserves its line"
+    desc: "Whitespace between opening and closing tags on the same line is preserved."
+    lambdas:
+      wrap: identity
+    template: "Before\n  {{#wrap}}  {{/wrap}}\nAfter"
+    expected: "Before\n    \nAfter"
+
+  - name: "Section lambda - inline closing tag preserves indentation"
+    desc: "A closing tag followed by content on the same line is not standalone, so its preceding indentation remains in the raw body."
+    lambdas:
+      wrap: identity
+    template: "Before{{#wrap}}  body\n  {{/wrap}}After"
+    expected: "Before  body\n  After"
+
+  - name: "Section lambda - intentional blank lines preserved"
+    desc: "Excluding standalone tag-line whitespace must not trim other blank lines or content indentation."
+    lambdas:
+      wrap: identity
+    template: "Before\n  {{#wrap}}\n\n  body\n\n  {{/wrap}}\nAfter"
+    expected: "Before\n\n  body\n\nAfter"
+
+  - name: "Render-callback lambda - nested standalone sections"
+    desc: "The render callback applies standalone handling before its output is wrapped by the lambda."
+    data: {items: [one, two]}
+    lambdas:
+      wrap: render-bold
+    template: "{{#wrap}}\n  {{#items}}\n  {{.}}\n  {{/items}}\n{{/wrap}}"
+    expected: "<b>  one\n  two\n</b>"
+
+  - name: "Render-callback lambda - standalone sections with alternate delimiters"
+    desc: "Render callbacks apply standalone handling with the active delimiters and preserve CRLF line endings."
+    data: {items: [one, two]}
+    lambdas:
+      wrap: render-bold
+    template: "{{=<% %>=}}\r\n<%#wrap%>\r\n  <%#items%>\r\n  <%.%>\r\n  <%/items%>\r\n<%/wrap%>"
+    expected: "<b>  one\r\n  two\r\n</b>"
+
+  - name: "Arg lambda - callback strips nested standalone sections"
+    desc: "Argument-taking section lambdas use the same standalone rules when rendering through a callback."
+    data: {items: [one, two]}
+    lambdas:
+      truncate: truncate
+    template: "{{#truncate 100}}\n  {{#items}}\n  {{.}}\n  {{/items}}\n{{/truncate}}"
+    expected: "  one\n  two\n"
+
+  - name: "Arg lambda - standalone closing indentation excluded"
+    desc: "The raw body passed with parsed arguments excludes standalone closing-tag indentation."
+    lambdas:
+      wrap: wrap-tag
+    template: "Before\n  {{#wrap \"em\"}}\n  body\n  {{/wrap}}\nAfter"
+    expected: "Before\n<em>  body\n</em>After"
 
   # ── Arg-accepting lambdas ─────────────────────────────────────────────────────
 
