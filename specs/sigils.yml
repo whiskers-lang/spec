@@ -171,6 +171,60 @@ tests:
     template: "A\n{{*x}}\nB\n{{/x}}\nC"
     expected: "A\nB\nC"
 
+  - name: "Exists - standalone after comment"
+    desc: "Removing a standalone comment line must not make the following indented section appear inline."
+    data: {x: true}
+    template: "Before\n  {{! comment}}\n  {{*x}}\n  body\n  {{/x}}\nAfter"
+    expected: "Before\n  body\nAfter"
+
+  - name: "NotNull - standalone after delimiter change"
+    desc: "A standalone delimiter change and the following indented section each consume their own line."
+    data: {x: true}
+    template: "Before\n  {{=<% %>=}}\n  <%~x%>\n  body\n  <%/x%>\nAfter"
+    expected: "Before\n  body\nAfter"
+
+  - name: "Truthy - standalone after delimiter change iterates without blank lines"
+    desc: "A section opener's newline must not survive and repeat for each array item."
+    data: {items: [one, two]}
+    template: "Before\n  {{=<% %>=}}\n  <%#items%>\n  <%.%>\n  <%/items%>\nAfter"
+    expected: "Before\n  one\n  two\nAfter"
+
+  - name: "Truthy - standalone after comment with empty array"
+    desc: "Skipping an empty array after a standalone comment must not leave the section's indentation."
+    data: {items: []}
+    template: "Before\n  {{! comment}}\n  {{#items}}\n  {{.}}\n  {{/items}}\nAfter"
+    expected: "Before\nAfter"
+
+  - name: "Null - consecutive standalone sections"
+    desc: "Removing a standalone closing-tag line must not change the following section's standalone status."
+    data: {x: null, y: null}
+    template: "Before\n  {{?x}}\n  first\n  {{/x}}\n  {{?y}}\n  second\n  {{/y}}\nAfter"
+    expected: "Before\n  first\n  second\nAfter"
+
+  - name: "Exists - consecutive standalone tags with tabs and CRLF"
+    desc: "Tab indentation and CRLF line endings follow the same consecutive standalone rules."
+    data: {x: true}
+    template: "Before\r\n\t{{! comment}}\r\n\t{{*x}}\r\n\tbody\r\n\t{{/x}}\r\nAfter"
+    expected: "Before\r\n\tbody\r\nAfter"
+
+  - name: "Exists - whitespace-only inline body"
+    desc: "An opening and closing tag sharing a line are not standalone, even with a whitespace-only body."
+    data: {x: true}
+    template: "Before\n  {{*x}}  {{/x}}\nAfter"
+    expected: "Before\n    \nAfter"
+
+  - name: "NotNull - empty inline body"
+    desc: "An empty section tag pair sharing a line must not consume that line's indentation or newline."
+    data: {x: true}
+    template: "Before\n  {{~x}}{{/x}}\nAfter"
+    expected: "Before\n  \nAfter"
+
+  - name: "Exists - standalone processing preserves intentional blank lines"
+    desc: "Only standalone tag lines are consumed; content indentation and other blank lines remain."
+    data: {x: true}
+    template: "Before\n\n  {{! comment}}\n  {{*x}}\n\n  body\n\n  {{/x}}\n\nAfter"
+    expected: "Before\n\n\n  body\n\n\nAfter"
+
   # ── List value ───────────────────────────────────────────────────────────────
 
   - name: "Exists - list value renders once"
