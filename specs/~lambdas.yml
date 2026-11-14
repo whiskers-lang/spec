@@ -14,7 +14,16 @@ overview: |
     forms do not. Missing keys retain normal lookup behavior; resolved values
     that do not accept arguments for this tag form cause an error.
 
-  Section lambdas ({{#key}}...{{/key}}):
+  Normal sections with value lambdas:
+    Func<object>                        — receives no arguments.
+    Func<object[], object>              — receives the supplied template arguments.
+    Invoke once, even for an empty body, and treat the result as ordinary section
+    data: skip null/false/empty arrays, iterate non-empty arrays with aliases and
+    metadata, or push other values as context. Empty strings, zero, and empty
+    dictionaries remain truthy. Do not re-render returned strings or recursively
+    invoke returned functions. Only # invokes these functions; other sigils do not.
+
+  Raw-body section lambdas ({{#key}}...{{/key}}):
     Func<string, string>                — receives raw (unexpanded) section content;
                                           return value is re-rendered as Mustache.
     Func<string, object>                — same, but return type is object.
@@ -25,7 +34,7 @@ overview: |
                                           that renders any template in the current
                                           context; return is re-rendered.
 
-  All section lambda return values are re-rendered as Mustache in the current
+  Raw-body section lambda return values are re-rendered as Mustache in the current
   context using the original delimiters.
 
   Standalone opening-tag line endings and closing-tag indentation are excluded
@@ -43,9 +52,12 @@ overview: |
     to-name         Func<string, object>   _ => "{{name}}"  (used to test re-rendering)
     join-args       Func<object[], object> args => string.Join("|", args)
                     Joins argument values using invariant string conversion.
+    value-arg       Func<object[], object> args => args[0]
+                    Returns its first parsed argument without conversion.
+    value-null      Func<object>           () => null
 
-  Test runners must register join-args for the argument-taking interpolation
-  fixtures below, in addition to the existing named lambda fixtures.
+  Test runners must register join-args, value-arg, and value-null for the value
+  lambda fixtures below, in addition to the existing named lambda fixtures.
 
 tests:
   # ── Interpolation lambdas ────────────────────────────────────────────────────
@@ -156,14 +168,134 @@ tests:
     template: "{{=<% %>=}}<% #wrap %><% name %><% /wrap %>"
     expected: "<b>World</b>"
 
-  # ── Func<object> in section (not a section lambda signature) ─────────────────
+  # ── Value lambdas in normal sections ────────────────────────────────────────
 
-  - name: "Func<object> in section - treated as truthy"
-    desc: "Func<object> is not a section lambda signature; the delegate is truthy so the body renders once, uncalled."
+  - name: "Value lambda section - no arguments"
+    desc: "The no-argument value lambda is invoked and its result becomes the section context."
     lambdas:
       ts: const-hello
-    template: "{{#ts}}body{{/ts}}"
+    template: "{{#ts}}Value: {{.}}{{/ts}}"
+    expected: "Value: hello"
+
+  - name: "Value lambda section - arguments and parent lookup"
+    desc: "Literal and dynamic arguments use interpolation conversion; parent data remains available."
+    data: {word: resolved, item: {word: local}}
+    lambdas: {join: join-args}
+    template: '{{#item}}{{#join word "two words" 42 3.14 *word *@root.word}}{{.}}/{{word}}{{/join}}{{/item}}'
+    expected: "word|two words|42|3.14|local|resolved/local"
+
+  - name: "Value lambda section - strings are data"
+    desc: "Returned tags are literal data, with ordinary escaped and unescaped interpolation."
+    data: {name: World}
+    lambdas: {value: value-arg}
+    template: '{{#value "<b>{{name}}</b>"}}{{.}}|{{{.}}}{{/value}}'
+    expected: "&lt;b&gt;{{name}}&lt;/b&gt;|<b>{{name}}</b>"
+
+  - name: "Value lambda section - null skips"
+    desc: "A no-argument value lambda returning null skips the section body."
+    lambdas: {value: value-null}
+    template: "before{{#value}}body{{/value}}after"
+    expected: "beforeafter"
+
+  - name: "Value lambda section - false skips"
+    desc: "A returned false value skips the section body."
+    data: {flag: false}
+    lambdas: {value: value-arg}
+    template: "{{#value *flag}}body{{/value}}"
+    expected: ""
+
+  - name: "Value lambda section - empty array skips"
+    desc: "An empty returned array skips the section body."
+    data: {items: []}
+    lambdas: {value: value-arg}
+    template: "{{#value *items}}body{{/value}}"
+    expected: ""
+
+  - name: "Value lambda section - array aliases and metadata"
+    desc: "Returned arrays iterate with normal aliases, metadata, and parent lookup."
+    data: {title: Parent, items: [{name: one}, {name: two}]}
+    lambdas: {value: value-arg}
+    template: "{{#value :item *items}}{{item.name}}:{{@item.index}}/{{@number}}/{{@length}}:{{title}};{{/value}}"
+    expected: "one:0/1/2:Parent;two:1/2/2:Parent;"
+
+  - name: "Value lambda section - dictionary context"
+    desc: "A returned dictionary renders once, binding the alias and preserving parent lookup."
+    data: {title: Parent, item: {name: Child}}
+    lambdas: {value: value-arg}
+    template: "{{#value :result *item}}{{result.name}}/{{name}}/{{title}}{{/value}}"
+    expected: "Child/Child/Parent"
+
+  - name: "Value lambda section - empty string is truthy"
+    desc: "An empty string retains ordinary Whiskers truthiness."
+    lambdas: {value: value-arg}
+    template: '{{#value ""}}[{{.}}]{{/value}}'
+    expected: "[]"
+
+  - name: "Value lambda section - zero is truthy"
+    desc: "Zero retains ordinary Whiskers truthiness and scalar context."
+    lambdas: {value: value-arg}
+    template: "{{#value 0}}[{{.}}]{{/value}}"
+    expected: "[0]"
+
+  - name: "Value lambda section - empty dictionary is truthy"
+    desc: "An empty dictionary renders once, rather than behaving as an empty array."
+    data: {item: {}}
+    lambdas: {value: value-arg}
+    template: "{{#value *item}}body{{/value}}"
     expected: "body"
+
+  - name: "Value lambda section - custom delimiters"
+    desc: "Value sections render existing body nodes with active delimiters, not returned template text."
+    lambdas: {value: value-arg}
+    template: '{{=<% %>=}}<%#value "<b><%name%></b>"%><%& .%><%/value%>'
+    expected: "<b><%name%></b>"
+
+  - name: "Value lambda section - standalone null result"
+    desc: "Standalone value-lambda section lines disappear when the result skips the body."
+    lambdas: {value: value-null}
+    template: "before\n  {{#value}}\nbody\n  {{/value}}\nafter"
+    expected: "before\nafter"
+
+  - name: "Value lambda section - standalone array body"
+    desc: "The existing standalone-normalized body renders once per returned item."
+    data: {items: [one, two]}
+    lambdas: {value: value-arg}
+    template: "before\n{{#value *items}}\n  {{.}}\n{{/value}}\nafter"
+    expected: "before\n  one\n  two\nafter"
+
+  - name: "Value lambda section - no-argument function rejects arguments"
+    desc: "A no-argument lambda cannot silently ignore supplied arguments."
+    lambdas: {value: const-hello}
+    template: "{{#value key}}body{{/value}}"
+    throws: true
+
+  - name: "Value lambda section - null data rejects arguments"
+    desc: "Present null data is not an argument-taking function."
+    data: {value: null}
+    template: "{{#value key}}body{{/value}}"
+    throws: true
+
+  - name: "Value lambda section - false data rejects arguments"
+    desc: "Present false data is not an argument-taking function."
+    data: {value: false}
+    template: "{{#value key}}body{{/value}}"
+    throws: true
+
+  - name: "Value lambda section - missing key"
+    desc: "An absent key produces no output in non-strict mode."
+    template: "before{{#missing key}}body{{/missing}}after"
+    expected: "beforeafter"
+
+  - name: "Value lambda section - strict missing key"
+    desc: "An absent value-lambda key is an error in strict mode."
+    template: "{{#@strict}}{{#missing key}}body{{/missing}}{{/@strict}}"
+    throws: true
+
+  - name: "Value lambda section - other sigils do not invoke"
+    desc: "Presence, nullness, and inverted checks inspect the function itself, not its returned null."
+    lambdas: {value: value-null}
+    template: "{{^value}}inverted{{/value}}{{*value}}present{{/value}}{{%value}}absent{{/value}}{{~value}}nonnull{{/value}}{{?value}}null{{/value}}"
+    expected: "presentnonnull"
 
   # ── Standalone section lambda ────────────────────────────────────────────────
 

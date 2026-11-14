@@ -143,13 +143,29 @@ When a key resolves to a function it is called as a lambda:
 
 - **Variable** `{{lambda}}` — called with no arguments; return value rendered (HTML-escaped) and interpolated.
 - **Variable with arguments** `{{lambda "text" 42 *value}}` — called with the parsed argument values in order, without raw section text or a render callback. The return value is converted to a string and interpolated, not re-rendered as a template.
-- **Section** `{{#lambda}}text{{/lambda}}` — called with the raw, unrendered section text; return value treated as a new template and re-rendered in the current context.
+- **Normal section, value lambda** `{{#lambda}}text{{/lambda}}` or `{{#lambda "text" 42 *value}}text{{/lambda}}` — a function with the corresponding variable-lambda contract is invoked exactly once per section occurrence, even when the body is empty. Its return value is ordinary section data, not template source.
+- **Normal section, raw-body lambda** `{{#lambda}}text{{/lambda}}` — a function accepting raw section text is called with the raw, unrendered body; its return value is treated as a new template and re-rendered in the current context. Argument-taking raw-body functions receive the parsed arguments alongside the body.
 
-For section lambdas, "raw" means unexpanded, not exempt from standalone whitespace handling. If the opening tag is standalone, its following line ending is excluded from the body passed to the lambda. If the closing tag is standalone, the indentation immediately before that tag is also excluded. All other body content, including unexpanded tags, content indentation, and intentional blank lines, is preserved.
+Value lambdas use the same argument matching and conversion as variable lambdas.
+After invocation, `null`, `false`, and empty arrays skip the body. Non-empty
+arrays iterate with the usual aliases and iteration metadata; strings,
+dictionaries, and other truthy scalars render the existing body once with the
+returned value as context. Parent-scope lookup remains available. Empty strings,
+zero, and empty dictionaries remain truthy, just as in ordinary data sections.
+`{{.}}` refers to the returned value (or the current array item), with normal
+interpolation escaping. Template syntax contained in a returned string is
+literal data and is not evaluated again. A returned function is not recursively
+invoked by section evaluation.
 
-Section lambda return values and templates passed to render callbacks follow the same standalone rules as ordinary templates. These rules also apply when the section lambda accepts arguments.
+Only `#` invokes value lambdas as section functions. Inverted (`^`), presence
+(`*`, `%`), and nullness (`~`, `?`) checks retain their existing behavior on the
+resolved function itself, without invoking it.
 
-Space-separated arguments after the key name are supported in variable tags and section opening tags. For section lambdas, they are passed alongside the raw text. Variable lambdas with arguments use normal interpolation escaping: `{{lambda arg}}` is HTML-escaped, while `{{{lambda arg}}}` and `{{&lambda arg}}` are unescaped. They remain variable tags, not standalone-eligible section tags, and work with the active delimiters.
+For raw-body section lambdas, "raw" means unexpanded, not exempt from standalone whitespace handling. If the opening tag is standalone, its following line ending is excluded from the body passed to the lambda. If the closing tag is standalone, the indentation immediately before that tag is also excluded. All other body content, including unexpanded tags, content indentation, and intentional blank lines, is preserved.
+
+Raw-body section lambda return values and templates passed to render callbacks follow the same standalone rules as ordinary templates. These rules also apply when the raw-body section lambda accepts arguments. Value-lambda sections render their existing body with ordinary section standalone handling; they do not parse their returned data as templates.
+
+Space-separated arguments after the key name are supported in variable tags and section opening tags. For raw-body section lambdas, they are passed alongside the raw text; for value lambdas, only the parsed values are passed. Variable lambdas with arguments use normal interpolation escaping: `{{lambda arg}}` is HTML-escaped, while `{{{lambda arg}}}` and `{{&lambda arg}}` are unescaped. They remain variable tags, not standalone-eligible section tags, and work with the active delimiters.
 
 Providing arguments to a resolved non-function key, or to a function that does not accept arguments for that tag form, is an error. Missing lambda keys follow normal variable or section lookup behavior: empty output in non-strict mode and an error in strict mode.
 
