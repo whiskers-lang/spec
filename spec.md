@@ -171,6 +171,8 @@ Providing arguments to a resolved non-function key, or to a function that does n
 
 Quoted and unquoted strings are literals: `"foo bar"` passes `foo bar`, and `foo` passes `foo`. Numeric literals are passed as numbers. A `*` prefix makes an argument dynamic, so `*foo` resolves `foo` from the current context and `*@root.foo` resolves from the root context.
 
+Unquoted string literals are identifiers: an ASCII letter or underscore followed by ASCII letters, digits, underscores, or hyphens. Quote strings containing other characters, such as `","`, `"foo.bar"`, or `"foo bar"`. Unsupported characters in tags are parse errors, never silently discarded: `{{#lambda ,}}` is invalid; use `{{#lambda ","}}` instead.
+
 ### Strict mode
 
 In strict mode, any variable or section tag that references a missing key throws an error. The `*` and `%` openers are exempt — `*` and `%` never throw regardless of mode.
